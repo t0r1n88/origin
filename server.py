@@ -1,53 +1,83 @@
 import asyncio
 
-def run_server(host,port):
-    dict_metric ={}
 
-    async def handle_echo(reader, writer):
-        data = await reader.read(1024)
-        message = data.decode()
-        # Обрабатываем полученную строку
-        message_lst = message.split()
-        if message_lst[0] == 'put' and len(message_lst) == 4:
+class Server(asyncio.Protocol):
+    dict_metric = {}
+    def connection_made(self, transport):
+        self.transport = transport
+    @staticmethod
+    def put(data):
 
-            if message_lst[1] not in dict_metric:
-                dict_metric[message_lst[1]] = []
-            temp_tuple = (message_lst[2]),(message_lst[3])
-            dict_metric[message_lst[1]].append(temp_tuple)
+        try:
+            # Обрабатываем строку
+            data = data.split()
+            if len(data) == 4 and data[1] != '*':
+                # Проверяем наличие ключа если его нет добавляем
+                if data[1] not in Server.dict_metric:
+                    Server.dict_metric[data[1]] = []
+                # Создаем временный кортеж для понятности
+                temp_tuple = data[2],data[3]
+                Server.dict_metric[data[1]].append(temp_tuple)
+                return 'ok\n\n'
+        except:
+            return 'error\nwrong command\n\n'
 
-            writer.write(b'ok\n\n')
-        elif message_lst[0] == 'get':
-            if message_lst[1] == '*':
-                string = ''
-                for key,value in dict_metric.items():
-
-                    string2 = ''
-                    for elem in value:
-                        bar = ' '.join(elem)
-                        string2 += bar +'\n'
-                    string += f'{key} {string2}'
-                message = f'ok\n{string}\n'
-
-            else:
-                if message_lst[1] in dict_metric:
-                    string = ''
-                    for value in dict_metric[message_lst[1]]:
-                        bar = ' '.join(value)
-                        string += bar
-                    message =f'ok\n{message_lst[1]} {string}\n'
-                else:
-                    message = 'ok\n\n'
-            writer.write(message.encode('utf8'))
+    def data_received(self, data):
+        data = data.decode('utf8')
+        if data.startswith('put'):
+            response = self.put(data)
+            self.transport.write(response.encode('utf8'))
+            print(Server.dict_metric)
+        elif data.startswith('get'):
+            response= self.get(data)
+            self.transport.write(response.encode('utf8'))
         else:
-            message = b'error\nwrong command\n\n'
-            writer.write(message)
+            self.transport.write('error\nwrong command\n\n'.encode('utf8'))
 
-        writer.close()
+    # @staticmethod
+    # def put(data):
+    #     pass
+
+    @staticmethod
+    def get(data):
+        try:
+            data = data.split()
+            key = data[1].rstrip()
+            if key not in Server.dict_metric:
+                response = 'ok\n\n'
+                return response
+            elif key == '*':
+                final_string = ''
+                for key,value in Server.dict_metric.items():
+                    key_lst = sorted(value,key=lambda x:x[1])
+                    between_string = ''
+                    for temp_tuple in key_lst:
+                        bar = ' '.join(temp_tuple)
+                        between_string += bar + '\n'
+                    final_string += f'{key} {between_string}'
+                response = f'ok\n{final_string}'
+                return response
+            else:
+                string = ''
+                key_lst =sorted( Server.dict_metric[key],key=lambda x:x[1])
+                for temp_tuple in key_lst:
+                    bar = ' '.join(temp_tuple)
+                    string += bar +'\n'
+                response = f'ok\n{key} {string}\n'
+                return response
 
 
+
+        except:
+            return 'error\nwrong command\n\n'
+
+
+
+def run_server(host, port):
     loop = asyncio.get_event_loop()
-    coro = asyncio.start_server(handle_echo, host, port, loop=loop)
+    coro = loop.create_server(Server, host, port)
     server = loop.run_until_complete(coro)
+
     try:
         loop.run_forever()
     except KeyboardInterrupt:
@@ -56,6 +86,5 @@ def run_server(host,port):
     server.close()
     loop.run_until_complete(server.wait_closed())
     loop.close()
-if __name__== '__main__':
-    host,port = input(),int(input())
-    run_server(host,port)
+if __name__=='__main__':
+    run_server('localhost',8888)
