@@ -15,7 +15,7 @@ def create_sprite(img, sprite_size):
 
 
 # базовый абстрактный класс с с инициализатором и абстрактным методом draw
-class AbstractObject(ABC, yaml.YAMLObject):
+class AbstractObject(ABC):
     def __init__(self):
         pass
 
@@ -59,32 +59,6 @@ class Creature(AbstractObject):
     def calc_max_HP(self):
         self.max_hp = 5 + self.stats["endurance"] * 2
 
-    def hit(self, other):
-        pass
-
-    def who_is_first(self, other):
-        """
-        Название конечно так себе .Предположим что первым по умолчанию является тот кто вызывает метод
-        who_is_first и только в случае если у other параметр Удача больше то первым бьет other
-        Вообще я думаю что можно сделать его staticmethod
-        :param other:
-        :return: кортеж где нулевым элементом будет первый бьющий а первым элементом, второй
-        """
-        first = self
-        if self.stats['luck'] < other.stats['luck']:
-            return (other, self)
-        return (first, other)
-
-
-class Enemy(Creature, Interactive):
-    yaml_tag = u'!enemies'
-
-    def __init__(self, icon, stats, hp, position):
-        self.icon = icon
-        self.stats = stats
-        self.hp = hp
-        self.position = position
-
     # Реализуем взаимодействие героя и врага, а также союзника
 
     # Удар
@@ -96,11 +70,32 @@ class Enemy(Creature, Interactive):
         Значит если не углублятся в подробности нужно определять первого бьющего, вне метода hit()
         Тогда нужно создать метод определяющий кто бьет первым
         :param other:
-        :return:
+        :return:изменение количества едениц здоровья
         """
-        first, second = self.who_is_first(other)
+
+    # def who_is_first(self, other):
+    #     """
+    #     Название конечно так себе .Предположим что первым по умолчанию является тот кто вызывает метод
+    #     who_is_first и только в случае если у other параметр Удача больше то первым бьет other
+    #     Вообще я думаю что можно сделать его staticmethod
+    #     :param other:
+    #     :return: кортеж где нулевым элементом будет первый бьющий а первым элементом, второй
+    #     """
+    #     first = self
+    #     if self.stats['luck'] < other.stats['luck']:
+    #         return (other, self)
+    #     return (first, other)
+    #
 
 
+class Enemy(Creature, Interactive):
+    yaml_tag = u'!enemies'
+
+    def __init__(self, icon, stats, hp, position):
+        self.icon = icon
+        self.stats = stats
+        self.hp = hp
+        self.position = position
 
     def interact(self, engine, hero):
         """
@@ -121,11 +116,35 @@ class Enemy(Creature, Interactive):
         врагов только бьет, союзники только накладывают эффекты.Но в будущем же возможно введение
         возможности переманивать врагов, говорить с ними и прочее. Поэтому исходя из пройденного материала
         и того что каждая функция должна делать что то одно, введу пока метод hit
+        Сделаем упрощенно
+        если враг побеждает то удаляем героя
+        если герой побеждает, то он получает опыт и удаляем врага
+        Чет помойму это костыль, лучше убрать этот метод
+        и просто внутри интеракта сравнивать удачу через условный оператор
         """
-        pass  # TODO
+
+        while True:
+            if self.stats['luck'] > hero.stats['luck']:
+                self.hit(hero)
+                hero.hit(self)
+            else:
+                # Будем считать что если удача равна то герой бьет первый
+                hero.hit(self)
+                self.hit(hero)
+            if self.hp > 0 and hero.hp <= 0:
+                print(f'Герой повержен !!!')
+                del hero
+                break
+            elif self.hp <= 0 and hero.hp > 0:
+                print('Герой одержал победу над исчадием мрака!!!')
+                hero.exp += self.stats['experience']
+                del self
+                break
+            else:
+                continue
 
 
-class Hero(Creature):
+class Hero(Creature, Interactive):
 
     def __init__(self, stats, icon):
         pos = [1, 1]
@@ -229,5 +248,3 @@ class Weakness(Effect):
         self.stats['endurance'] -= 3
         self.stats['intelligence'] -= 3
         self.stats['luck'] -= 3
-# FIXME
-# add classes
