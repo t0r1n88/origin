@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
 import pygame
 import random
+import yaml
 
 
+# Комменты чтобы не запутаться)
+# Создание изображения объекта
 def create_sprite(img, sprite_size):
     icon = pygame.image.load(img).convert_alpha()
     icon = pygame.transform.scale(icon, (sprite_size, sprite_size))
@@ -11,7 +14,8 @@ def create_sprite(img, sprite_size):
     return sprite
 
 
-class AbstractObject(ABC):
+# базовый абстрактный класс с с инициализатором и абстрактным методом draw
+class AbstractObject(ABC, yaml.YAMLObject):
     def __init__(self):
         pass
 
@@ -19,6 +23,8 @@ class AbstractObject(ABC):
         pass
 
 
+# базовый абстрактный класс для организации взаимодействия между героем и объектами(сейчас это
+# враги(Enemy) и союзники(Ally))
 class Interactive(ABC):
 
     @abstractmethod
@@ -26,7 +32,10 @@ class Interactive(ABC):
         pass
 
 
+# класс союзника
 class Ally(AbstractObject, Interactive):
+    # Получаем данные из ямл файла
+    yaml_tag = u'!ally'
 
     def __init__(self, icon, action, position):
         self.sprite = icon
@@ -37,8 +46,9 @@ class Ally(AbstractObject, Interactive):
         self.action(engine, hero)
 
 
+# Базовый класс
 class Creature(AbstractObject):
-
+    # кстати для отрисовки других обьектов навроде сундука, нужно же наверное создавать отдельный класс?
     def __init__(self, icon, stats, position):
         self.sprite = icon
         self.stats = stats
@@ -49,15 +59,69 @@ class Creature(AbstractObject):
     def calc_max_HP(self):
         self.max_hp = 5 + self.stats["endurance"] * 2
 
+    def hit(self, other):
+        pass
+
+    def who_is_first(self, other):
+        """
+        Название конечно так себе .Предположим что первым по умолчанию является тот кто вызывает метод
+        who_is_first и только в случае если у other параметр Удача больше то первым бьет other
+        Вообще я думаю что можно сделать его staticmethod
+        :param other:
+        :return: кортеж где нулевым элементом будет первый бьющий а первым элементом, второй
+        """
+        first = self
+        if self.stats['luck'] < other.stats['luck']:
+            return (other, self)
+        return (first, other)
+
 
 class Enemy(Creature, Interactive):
+    yaml_tag = u'!enemies'
+
     def __init__(self, icon, stats, hp, position):
         self.icon = icon
         self.stats = stats
         self.hp = hp
         self.position = position
 
+    # Реализуем взаимодействие героя и врага, а также союзника
+
+    # Удар
+    def hit(self, other):
+        """
+        Определяем, кто бьет первым,ха а тут встает проблема, каждый раз перед ударом будет производится
+        расчет или нет.Ведь герой может получить какой то эффект который повлияет на его удачу. А так как
+        у нас вроде бы пошаговый бой,то возможна ситуация когда противник просто не сможет ударить.
+        Значит если не углублятся в подробности нужно определять первого бьющего, вне метода hit()
+        Тогда нужно создать метод определяющий кто бьет первым
+        :param other:
+        :return:
+        """
+        first, second = self.who_is_first(other)
+
+
+
     def interact(self, engine, hero):
+        """
+
+        :param engine:движок
+        :param hero: объект героя
+        :return: результат сражения. Удаление объекта героя либо объекта врага
+        Бой будет идти пока у кого то не закончатся хп
+        Первый нападает тот  у кого больше Удача
+        Урон будем высчитывать складывая показатели Силы и Интеллекта, дабы соблюсти баланс между
+        воинами и магами и добавлять какой то рандомный коэфициент в зависимости от удачи.
+        Кстати герой может же сбежать от боя, но думаю это потребует серьезной модификации движка
+        Хотя по идее, нужно будет поменять позицию героя здоровье врага и героя,
+         ввести параметр регерации, какой то эффект,
+         ну например маг впадает в уныние а воин хочет отомстить.Ладно не будем плодить сущностей
+         Для боя нужно реализовать метод hit в базовом классе, так как союзник же ведь тоже гипотетически может сражаться
+        Хотя можно предположить что герой взаимодействует с объектами только одним способом т.е
+        врагов только бьет, союзники только накладывают эффекты.Но в будущем же возможно введение
+        возможности переманивать врагов, говорить с ними и прочее. Поэтому исходя из пройденного материала
+        и того что каждая функция должна делать что то одно, введу пока метод hit
+        """
         pass  # TODO
 
 
@@ -146,15 +210,24 @@ class Effect(Hero):
 
 class Berserk(Effect):
     def apply_effect(self):
-        pass  # TODO
+        self.stats['strength'] += 10
+        self.stats['endurance'] += 10
+        self.stats['intelligence'] -= 5
 
 
 class Blessing(Effect):
     def apply_effect(self):
-        pass  # TODO
+        self.stats['strength'] += 5
+        self.stats['endurance'] += 5
+        self.stats['intelligence'] += 5
+        self.stats['luck'] += 5
+
 
 class Weakness(Effect):
     def apply_effect(self):
-        pass  # TODO
+        self.stats['strength'] -= 3
+        self.stats['endurance'] -= 3
+        self.stats['intelligence'] -= 3
+        self.stats['luck'] -= 3
 # FIXME
 # add classes
